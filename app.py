@@ -70,3 +70,18 @@ driver.find_element_by_xpath("//body").click()
 
 # Click on Search button
 driver.find_element_by_xpath('/html/body/div[1]/div[1]/main/div[1]/div/div/div[1]/div/div/section[2]/div/div/div[2]/form[1]/div[1]/div/div[2]/button/span/span[1]/svg').click()
+
+# Finds the username of the PC in use
+user = getpass.getuser()
+
+# Chrome options
+options = webdriver.ChromeOptions()
+options.add_argument('--incognito')
+options.add_argument('--headless')
+agents = ["Firefox/66.0.3","Chrome/73.0.3683.68","Edge/16.16299"]
+options.add_argument('--user-agent=' + agents[(requests%len(agents))] + '"')
+options.add_experimental_option('useAutomationExtension', False)
+
+driver = webdriver.Chrome("chromedriver.exe", options=chrome_options, desired_capabilities=chrome_options.to_capabilities())
+driver.implicitly_wait(20)
+driver.get(url)

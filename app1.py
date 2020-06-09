@@ -1,49 +1,154 @@
-import requests
-import getpass
-from selenium import webdriver
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions
 from bs4 import BeautifulSoup
+import pandas as pd
+import requests
+import re
+from twilio.rest import Client
 
-from_airport = 'London'
-to_airport = 'Athens'
-departure_date = '05/07/2020'
-return_date = '20/08/2020'
+one_way = False
+email = True
+sms = True
 
-# Finds the username of the PC in use
-user = getpass.getuser()
+# Flight details
+from_airport = 'LON'
+to_airport = 'ATH'
+departure_date = '2020-07-05'
+return_date = '2020-08-21'
 
-# Chrome options
-options = webdriver.ChromeOptions()
-options.add_argument('--ignore-certificate-errors')
-options.add_argument('--incognito')
-options.add_argument('--headless')
+# Email details
+from_email = 'sofiachalk@outlook.com'
+from_email_password = '8Eskati?!?'
+to_email = 'sofia.chalkiadaki.94@gmail.com'
 
-# Path where chromedriver is saved
-chromedriver = 'C:\\Users\\schalkiadaki\\Downloads\\chromedriver.exe'
-driver = webdriver.Chrome(executable_path=chromedriver, options=options)
-url ='https://www.momondo.co.uk/flight-search/LON-ATH/2020-07-08/2020-07-15?sort=bestflight_a&fs=stops=0'
-url = 'https://www.kayak.com/flights/LON-ATH/2020-07-08/2020-07-15?sort=bestflight_a&fs=stops=0'
+# SMS details
+to_sms = '+44 7736 978669'
 
-# Try to  to fetch the content from the given url
-response = requests.get(url)
-# Check if the status code is 200 = successful
-if not response.status_code == 200:
-    print('HTTP error', response.status_code)
+# User agent
+user_agent = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_3) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/35.0.1916.47 Safari/537.36'
+# Headers for user-agent
+headers = {'User-Agent': user_agent}
+
+
+def scrape_flights(url, headers, from_airport, to_airport, departure_date, return_date, one_way):
+    global df
+    # Get response from url using requests
+    response = requests.get(url, headers=headers)
+    html = response.content
+
+    soup = BeautifulSoup(html, 'html.parser')
+    # Get departure time
+    soup_dep_time = soup.find_all('span', class_='depart-time base-time')
+    # Get arrival time
+    soup_arr_time = soup.find_all('span', class_='arrival-time base-time')
+    # Get the price
+    regex = re.compile('Common-Booking-MultiBookProvider (.*)multi-row Theme-featured-large(.*)')
+    soup_price = soup.find_all('div', attrs={'class': regex})
+
+    # Put findings in lists
+    dep_time = []
+    for div in soup_dep_time:
+        dep_time.append(div.getText())
+
+    arr_time = []
+    for div in soup_arr_time:
+        arr_time.append((div.getText()))
+
+    price = []
+    currency = []
+    for div in soup_price:
+        currency.append(div.getText().split('\n')[3][0:1])
+        price.append(div.getText().split('\n')[3][1:])
+
+    # Create df from the results
+    if one_way == False and url == arr_url:
+        df = pd.DataFrame({'Origin': to_airport,
+                           'Destination': from_airport,
+                           'Date': return_date,
+                           'Departure Time': dep_time,
+                           'Arrival Time': arr_time,
+                           'Price': price,
+                           'Currency': currency})
+    else:
+        df = pd.DataFrame({'Origin': from_airport,
+                           'Destination': to_airport,
+                           'Date': departure_date,
+                           'Departure Time': dep_time,
+                           'Arrival Time': arr_time,
+                           'Price': price,
+                           'Currency': currency})
+    # Sort price from low to high
+    df['Price'] = df['Price'].astype(int)
+    df['Price'] = df['Price'].sort_values(ascending=True)
+
+
+def send_sms(final_dict, to_sms, sms):
+    # If final_dict is not empty send an sms with the results
+    if sms == True and len(final_dict) > 0:
+        account_sid = 'AC6ac35fe3665d3817d27a0587e1cb0b16'
+        auth_token = '73239a98d037855ce3322c592a2b75f1'
+        client = Client(account_sid, auth_token)
+
+        message_text = 'Flight Info:\n{}'.format("\n".join(str(v)[1:-1] for v in final_dict))
+
+        print(message_text)
+
+        client.messages \
+            .create(
+            body=message_text,
+            from_='+12029310937',
+            to=to_sms)
+
+
+def send_email(final_df, email, from_email, from_email_password, to_email):
+    if email == True:
+        import smtplib
+        from email.mime.text import MIMEText
+        from email.mime.multipart import MIMEMultipart
+
+        # final_df to html table
+        message_text = MIMEMultipart()
+        message_text['Subject'] = 'Flight Info'
+        html = """\
+        <html>
+          <head></head>
+          <body>
+            {0}
+          </body>
+        </html>
+        """.format(final_df.to_html())
+        html_msg = MIMEText(html, 'html')
+        message_text.attach(html_msg)
+
+        # Email settings
+        mail = smtplib.SMTP('smtp.office365.com', 587)
+        mail.starttls()
+        mail.login(from_email, from_email_password)
+        mail.sendmail(from_email, to_email, message_text.as_string())
+        mail.close()
+
+
+# Url
+dep_url = 'https://www.kayak.co.uk/flights/' + from_airport + '-' + to_airport + '/' + departure_date + '?sort=bestflight_a&fs=stops=0'
+arr_url = 'https://www.kayak.co.uk/flights/' + to_airport + '-' + from_airport + '/' + return_date + '?sort=bestflight_a&fs=stops=0'
+
+# If one_way= True then run the function only once otherwise, run it again and change the info
+if one_way == True:
+    scrape_flights(url=dep_url, headers=headers, from_airport=from_airport, to_airport=to_airport,
+                   departure_date=departure_date, return_date=return_date, one_way=True)
+    final_df = df.copy()
 else:
-    soup = BeautifulSoup(response.text, 'html.parser')
-    print(soup)
-    dep_time = soup.find_all('span', class_= 'depart-time base-time')
-    arr_time = soup.find_all('span', attrs={'class': 'arrival-time base-time'})
-    duration = soup.find_all('span', attrs={'class': 'section duration allow-multi-modal-icons'})
-    deptime = []
-    for div in dep_time:
-        deptime.append(div.getText()[:-1])
-s = driver.page_source
-s = response.content
-from urllib.request import urlopen
-page = urllib.urlopen(url)
-soup = BeautifulSoup(page, 'html.parser')
-driver = webdriver.Chrome()
-html_source_code = driver.execute_script("return document.body.innerHTML;")
-html_soup: BeautifulSoup = BeautifulSoup(html_source_code, 'html.parser')
+    scrape_flights(url=dep_url, headers=headers, from_airport=from_airport, to_airport=to_airport,
+                   departure_date=departure_date, return_date=return_date, one_way=False)
+    dep_df = df.copy()
+    scrape_flights(url=arr_url, headers=headers, from_airport=from_airport, to_airport=to_airport,
+                   departure_date=departure_date, return_date=return_date, one_way=False)
+    arr_df = df.copy()
+    final_df = dep_df.append(arr_df)
+
+# Put df in a dictionary to print it in a message later
+final_dict = final_df.to_dict('r')
+
+# Run sms function
+send_sms(final_dict=final_df, sms=sms, to_sms=to_sms)
+
+# Run email function
+send_email(final_df=final_df, email=email, from_email=from_email, to_email=to_email, from_email_password=from_email_password)
