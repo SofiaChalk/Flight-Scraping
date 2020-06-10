@@ -3,6 +3,10 @@ import pandas as pd
 import requests
 import re
 from twilio.rest import Client
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+import os
 
 one_way = False
 email = True
@@ -15,12 +19,12 @@ departure_date = '2020-07-05'  # Format needed: yyyy-mm-dd
 return_date = '2020-08-21'
 
 # Email details
-from_email = 'sofiachalk@outlook.com'
-from_email_password = '8Eskati?!?'
+from_email = os.environ.get('email_user')
+from_email_password = os.environ.get('email_pass')
 to_email = 'sofia.chalkiadaki.94@gmail.com'
 
 # SMS details
-to_sms = '+44 7736 978669'  # Format: Include country code with +, eg:+xx xxxxxxxxxx
+to_sms = os.environ.get('phone_num')  # Format: Include country code with +, eg:+xx xxxxxxxxxx
 
 # User agent
 user_agent = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_3) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/35.0.1916.47 Safari/537.36'
@@ -83,13 +87,11 @@ def scrape_flights(url, headers, from_airport, to_airport, departure_date, retur
 def send_sms(final_dict, to_sms, sms):
     # If final_dict is not empty send an sms with the results
     if sms == True and len(final_dict) > 0:
-        account_sid = 'AC6ac35fe3665d3817d27a0587e1cb0b16'
-        auth_token = '73239a98d037855ce3322c592a2b75f1'
+        account_sid = os.environ.get('twilio_account_sid')
+        auth_token = os.environ.get('twilio_auth_token')
         client = Client(account_sid, auth_token)
 
         message_text = 'Flight Info:\n{}'.format("\n".join(str(v)[1:-1] for v in final_dict))
-
-        print(message_text)
 
         client.messages \
             .create(
@@ -100,9 +102,6 @@ def send_sms(final_dict, to_sms, sms):
 
 def send_email(final_df, email, from_email, from_email_password, to_email):
     if email == True:
-        import smtplib
-        from email.mime.text import MIMEText
-        from email.mime.multipart import MIMEMultipart
 
         # final_df to html table
         message_text = MIMEMultipart()
@@ -129,6 +128,7 @@ def send_email(final_df, email, from_email, from_email_password, to_email):
 # Url
 dep_url = 'https://www.kayak.co.uk/flights/' + from_airport + '-' + to_airport + '/' + departure_date + '?sort=bestflight_a&fs=stops=0'
 arr_url = 'https://www.kayak.co.uk/flights/' + to_airport + '-' + from_airport + '/' + return_date + '?sort=bestflight_a&fs=stops=0'
+
 
 # If one_way= True then run the function only once otherwise, run it again and change the info
 if one_way == True:
