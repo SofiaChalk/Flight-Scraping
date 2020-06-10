@@ -19,12 +19,12 @@ departure_date = '2020-07-05'  # Format needed: yyyy-mm-dd
 return_date = '2020-08-21'
 
 # Email details
-from_email = os.environ.get('email_user')
-from_email_password = os.environ.get('email_pass')
-to_email = 'sofia.chalkiadaki.94@gmail.com'
+from_email = 'your email'
+from_email_password = 'your_email_pass'
+to_email = 'to email'
 
 # SMS details
-to_sms = os.environ.get('phone_num')  # Format: Include country code with +, eg:+xx xxxxxxxxxx
+to_sms = 'phone number'  # Format: Include country code with +, eg:+xx xxxxxxxxxx
 
 # User agent
 user_agent = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_3) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/35.0.1916.47 Safari/537.36'
@@ -87,8 +87,8 @@ def scrape_flights(url, headers, from_airport, to_airport, departure_date, retur
 def send_sms(final_dict, to_sms, sms):
     # If final_dict is not empty send an sms with the results
     if sms == True and len(final_dict) > 0:
-        account_sid = os.environ.get('twilio_account_sid')
-        auth_token = os.environ.get('twilio_auth_token')
+        account_sid = 'twilio_account_sid'
+        auth_token = 'twilio_auth_token'
         client = Client(account_sid, auth_token)
 
         message_text = 'Flight Info:\n{}'.format("\n".join(str(v)[1:-1] for v in final_dict))
