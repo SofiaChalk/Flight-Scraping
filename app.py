@@ -1,87 +1,155 @@
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.firefox.options import Options
-from selenium import webdriver
-import getpass
-import time
-from_airport = 'London'
-to_airport = 'Athens'
-departure_date = '05/07/2020'
-return_date = '20/08/2020'
+from bs4 import BeautifulSoup
+import pandas as pd
+import requests
+import re
+from twilio.rest import Client
 
-# Finds the username of the PC in use
-user = getpass.getuser()
+one_way = False
+email = True
+sms = True
 
-# Chrome options
-options = webdriver.ChromeOptions()
-options.add_argument('--ignore-certificate-errors')
-options.add_argument('--incognito')
-# options.add_argument('--headless')
+# Flight details
+from_airport = 'LON'  # Country Code
+to_airport = 'ATH'  # Country Code
+departure_date = '2020-07-05'  # Format needed: yyyy-mm-dd
+return_date = '2020-08-21'
 
-# Path where chromedriver is saved
-chromedriver = 'C:\\Users\\' + user + '\\Documents\\Python\\Python Scripts\\Flight Scrapping\\chromedriver.exe'
+# Email details
+from_email = 'sofiachalk@outlook.com'
+from_email_password = '8Eskati?!?'
+to_email = 'sofia.chalkiadaki.94@gmail.com'
 
-url = 'https://www.kayak.co.uk/flights'
+# SMS details
+to_sms = '+44 7736 978669'  # Format: Include country code with +, eg:+xx xxxxxxxxxx
 
-driver = webdriver.Chrome(executable_path=chromedriver, options=options)
-driver.get(url)
-time.sleep(5)
+# User agent
+user_agent = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_3) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/35.0.1916.47 Safari/537.36'
+# Headers for user-agent
+headers = {'User-Agent': user_agent}
 
-# Click No thanks on cookies pop-up
-try:
-    driver.find_element_by_xpath('/html/body/div[37]/div/div[3]/div/div/div/div/div[1]/div/div[2]/div[2]/div[2]/button').click()
-except:
-    pass
-time.sleep(5)
 
-# Origin Airport
-# Click on the origin airport cell
-driver.find_element_by_xpath('/html/body/div[1]/div[1]/main/div[1]/div/div/div[1]/div/div/section[2]/div/div/div[2]/form[1]/div[1]/div/div[1]/div/div[1]/div/div/div/div/div[1]').click()
-# Delete any origin location that might be there already
-try:
-    driver.switch_to.frame('__cmpLocator')
-    driver.find_element_by_xpath('/html/body/div[4]/div/div[2]/div[1]/div[2]/div/div[2]/button/svg/use//svg/path').click()
-except:
-    pass
-# Type the origin airport
-driver.find_element_by_xpath('/html/body/div[4]/div/div[2]/div[1]/div[3]/input').send_keys(from_airport)
-# Click on empty space
-driver.find_element_by_xpath("//body").click()
-time.sleep(3)
+def scrape_flights(url, headers, from_airport, to_airport, departure_date, return_date, one_way):
+    global df
+    # Get response from url using requests
+    response = requests.get(url, headers=headers)
+    html = response.content
 
-# Destination airport
-# Click on the destination airport cell
-driver.find_element_by_xpath('/html/body/div[1]/div[1]/main/div[1]/div/div/div[1]/div/div/section[2]/div/div/div[2]/form[1]/div[1]/div/div[1]/div/div[3]/div/div/div').click()
-# Type the origin airport
-driver.find_element_by_xpath('/html/body/div[5]/div/div[2]/div[1]/div[3]/input').send_keys(to_airport)
-# Click on empty space
-driver.find_element_by_xpath("//body").click()
+    soup = BeautifulSoup(html, 'html.parser')
+    # Get departure time
+    soup_dep_time = soup.find_all('span', class_='depart-time base-time')
+    # Get arrival time
+    soup_arr_time = soup.find_all('span', class_='arrival-time base-time')
+    # Get the price
+    regex = re.compile('Common-Booking-MultiBookProvider (.*)multi-row Theme-featured-large(.*)')
+    soup_price = soup.find_all('div', class_= regex)
 
-# Date
-# Click on the departure date cell
-driver.find_element_by_xpath('/html/body/div[1]/div[1]/main/div[1]/div/div/div[1]/div/div/section[2]/div/div/div[2]/form[1]/div[1]/div/div[1]/div/div[4]/div/div[1]/div/div/div[1]').click()
-# Type date
-driver.find_element_by_xpath('/html/body/div[6]/div/div[2]/div[1]/div[1]/div/div/div[1]/div[1]/div/div[2]/div[1]').send_keys(departure_date)
-# Type date for return date cell
-driver.find_element_by_xpath('/html/body/div[6]/div/div[2]/div[1]/div[1]/div/div/div[1]/div[3]/div[1]/div/div[2]/div[1]').send_keys(return_date)
-# Click on empty space
-driver.find_element_by_xpath("//body").click()
+    # Put findings in lists
+    dep_time = []
+    for div in soup_dep_time:
+        dep_time.append(div.getText())
 
-# Click on Search button
-driver.find_element_by_xpath('/html/body/div[1]/div[1]/main/div[1]/div/div/div[1]/div/div/section[2]/div/div/div[2]/form[1]/div[1]/div/div[2]/button/span/span[1]/svg').click()
+    arr_time = []
+    for div in soup_arr_time:
+        arr_time.append((div.getText()))
 
-# Finds the username of the PC in use
-user = getpass.getuser()
+    price = []
+    currency = []
+    for div in soup_price:
+        currency.append(div.getText().split('\n')[3][0:1])
+        price.append(div.getText().split('\n')[3][1:])
 
-# Chrome options
-options = webdriver.ChromeOptions()
-options.add_argument('--incognito')
-options.add_argument('--headless')
-agents = ["Firefox/66.0.3","Chrome/73.0.3683.68","Edge/16.16299"]
-options.add_argument('--user-agent=' + agents[(requests%len(agents))] + '"')
-options.add_experimental_option('useAutomationExtension', False)
+    # Create df from the results
+    if one_way == False and url == arr_url:
+        df = pd.DataFrame({'Origin': to_airport,
+                           'Destination': from_airport,
+                           'Date': return_date,
+                           'Departure Time': dep_time,
+                           'Arrival Time': arr_time,
+                           'Price': price,
+                           'Currency': currency})
+    else:
+        df = pd.DataFrame({'Origin': from_airport,
+                           'Destination': to_airport,
+                           'Date': departure_date,
+                           'Departure Time': dep_time,
+                           'Arrival Time': arr_time,
+                           'Price': price,
+                           'Currency': currency})
+    # Sort price from low to high
+    df['Price'] = df['Price'].astype(int)
+    df['Price'] = df['Price'].sort_values(ascending=True)
 
-driver = webdriver.Chrome("chromedriver.exe", options=chrome_options, desired_capabilities=chrome_options.to_capabilities())
-driver.implicitly_wait(20)
-driver.get(url)
+
+def send_sms(final_dict, to_sms, sms):
+    # If final_dict is not empty send an sms with the results
+    if sms == True and len(final_dict) > 0:
+        account_sid = 'AC6ac35fe3665d3817d27a0587e1cb0b16'
+        auth_token = '73239a98d037855ce3322c592a2b75f1'
+        client = Client(account_sid, auth_token)
+
+        message_text = 'Flight Info:\n{}'.format("\n".join(str(v)[1:-1] for v in final_dict))
+
+        print(message_text)
+
+        client.messages \
+            .create(
+            body=message_text,
+            from_='+12029310937',
+            to=to_sms)
+
+
+def send_email(final_df, email, from_email, from_email_password, to_email):
+    if email == True:
+        import smtplib
+        from email.mime.text import MIMEText
+        from email.mime.multipart import MIMEMultipart
+
+        # final_df to html table
+        message_text = MIMEMultipart()
+        message_text['Subject'] = 'Flight Info'
+        html = """\
+        <html>
+          <head></head>
+          <body>
+            {0}
+          </body>
+        </html>
+        """.format(final_df.to_html())
+        html_msg = MIMEText(html, 'html')
+        message_text.attach(html_msg)
+
+        # Email settings
+        mail = smtplib.SMTP('smtp.office365.com', 587)
+        mail.starttls()
+        mail.login(from_email, from_email_password)
+        mail.sendmail(from_email, to_email, message_text.as_string())
+        mail.close()
+
+
+# Url
+dep_url = 'https://www.kayak.co.uk/flights/' + from_airport + '-' + to_airport + '/' + departure_date + '?sort=bestflight_a&fs=stops=0'
+arr_url = 'https://www.kayak.co.uk/flights/' + to_airport + '-' + from_airport + '/' + return_date + '?sort=bestflight_a&fs=stops=0'
+
+# If one_way= True then run the function only once otherwise, run it again and change the info
+if one_way == True:
+    scrape_flights(url=dep_url, headers=headers, from_airport=from_airport, to_airport=to_airport,
+                   departure_date=departure_date, return_date=return_date, one_way=True)
+    final_df = df.copy()
+else:
+    scrape_flights(url=dep_url, headers=headers, from_airport=from_airport, to_airport=to_airport,
+                   departure_date=departure_date, return_date=return_date, one_way=False)
+    dep_df = df.copy()
+    scrape_flights(url=arr_url, headers=headers, from_airport=from_airport, to_airport=to_airport,
+                   departure_date=departure_date, return_date=return_date, one_way=False)
+    arr_df = df.copy()
+    final_df = dep_df.append(arr_df)
+
+# Put df in a dictionary to print it in a message later
+final_dict = final_df.to_dict('r')
+
+# Run sms function
+send_sms(final_dict=final_df, sms=sms, to_sms=to_sms)
+
+# Run email function
+send_email(final_df=final_df, email=email, from_email=from_email, to_email=to_email,
+           from_email_password=from_email_password)
